@@ -26,8 +26,13 @@ const randScore = () => Math.floor(Math.random() * 10) + 1
 // Utility: distance between two points
 const dist = (a: { x: number, y: number }, b: { x: number, y: number }) => Math.hypot(a.x - b.x, a.y - b.y)
 
-// Create HTTP server (for webhook POSTs)
-const server = http.createServer()
+// Create HTTP server (for webhook POSTs and healthcheck)
+const server = http.createServer((req, res) => {
+    if (req.url === '/healthz') {
+        res.writeHead(200, { 'Content-Type': 'text/plain' })
+        res.end('ok')
+    }
+})
 const wss = new WebSocketServer({ noServer: true })
 
 // Handle WebSocket upgrades

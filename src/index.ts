@@ -3,6 +3,7 @@ import http from 'http'
 import WebSocket, { WebSocketServer } from 'ws'
 import url from 'url'
 import fetch from 'node-fetch'
+import { handleUserEat, handleFoodEat } from './lib'
 
 // Use WeakMap to associate WebSocket with gameId
 const wsGameIds = new WeakMap<WebSocket, string>()
@@ -25,6 +26,10 @@ const randPos = () => ({ x: Math.random() * 1000, y: Math.random() * 1000 })
 const randScore = () => Math.floor(Math.random() * 10) + 1
 // Utility: distance between two points
 const dist = (a: { x: number, y: number }, b: { x: number, y: number }) => Math.hypot(a.x - b.x, a.y - b.y)
+// Utility: get player radius (should match frontend logic)
+const playerRadius = (score: number) => 10 + score
+// Utility: get food radius (optional, dynamic)
+const foodRadius = (score: number) => 10 + score
 
 // Create HTTP server (for webhook POSTs and healthcheck)
 const server = http.createServer((req, res) => {
@@ -81,8 +86,9 @@ wss.on('connection', (ws: WebSocket, req) => {
                 Object.assign(player, { x: msg.x, y: msg.y })
                 // Check for food collision
                 Object.values(g.food).forEach(food => {
-                    if (dist(player, food) < 20) {
+                    if (dist(player, food) < playerRadius(player.score) + foodRadius(food.score)) {
                         player.score += food.score
+                        handleFoodEat(food.id, playerId)
                         console.log(`[EAT] ${player.name} (${playerId}) ate food ${food.id} (score ${food.score}) at (${food.x},${food.y}) in ${gameId}`)
                         fetch(WEBHOOK_URL, {
                             method: 'POST',
@@ -98,18 +104,23 @@ wss.on('connection', (ws: WebSocket, req) => {
                 })
                 // Check for player collision (eating)
                 Object.entries(g.players).forEach(([otherId, other]) => {
-                    if (otherId !== playerId && dist(player, other) < 20) {
-                        if (player.score > other.score) {
-                            player.score += other.score
-                            console.log(`[PLAYER EAT] ${player.name} (${playerId}) ate ${other.name} (${otherId}) and gained ${other.score} points in ${gameId}`)
-                            delete g.players[otherId]
-                        } else if (player.score < other.score) {
-                            other.score += player.score
-                            console.log(`[PLAYER EAT] ${other.name} (${otherId}) ate ${player.name} (${playerId}) and gained ${player.score} points in ${gameId}`)
-                            delete g.players[playerId]
-                            // End processing for this player since they are eaten
-                            broadcastState(gameId)
-                            return
+                    if (otherId !== playerId) {
+                        const r1 = playerRadius(player.score)
+                        const r2 = playerRadius(other.score)
+                        if (dist(player, other) < r1 + r2) {
+                            if (player.score > other.score) {
+                                player.score += other.score
+                                handleUserEat(otherId, playerId, gameId)
+                                console.log(`[PLAYER EAT] ${player.name} (${playerId}) ate ${other.name} (${otherId}) and gained ${other.score} points in ${gameId}`)
+                                delete g.players[otherId]
+                            } else if (player.score < other.score) {
+                                other.score += player.score
+                                handleUserEat(playerId, otherId, gameId)
+                                console.log(`[PLAYER EAT] ${other.name} (${otherId}) ate ${player.name} (${playerId}) and gained ${player.score} points in ${gameId}`)
+                                delete g.players[playerId]
+                                broadcastState(gameId)
+                                return
+                            }
                         }
                     }
                 })

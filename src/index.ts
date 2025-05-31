@@ -89,7 +89,7 @@ wss.on('connection', (ws: WebSocket, req) => {
                 Object.values(g.food).forEach(food => {
                     if (dist(player, food) < playerRadius(player.score) + foodRadius(food.score)) {
                         player.score += food.score
-                        handleFoodEat(food.id, playerId)
+                        handleFoodEat(food.score.toString(), player.walletAddress)
                         console.log(`[EAT] ${player.name} (${playerId}) ate food ${food.id} (score ${food.score}) at (${food.x},${food.y}) in ${gameId}`)
                         fetch(WEBHOOK_URL, {
                             method: 'POST',
@@ -111,12 +111,12 @@ wss.on('connection', (ws: WebSocket, req) => {
                         if (dist(player, other) < r1 + r2) {
                             if (player.score > other.score) {
                                 player.score += other.score
-                                handleUserEat(otherId, playerId, gameId)
+                                handleUserEat(other.walletAddress, player.walletAddress, gameId)
                                 console.log(`[PLAYER EAT] ${player.name} (${playerId}) ate ${other.name} (${otherId}) and gained ${other.score} points in ${gameId}`)
                                 delete g.players[otherId]
                             } else if (player.score < other.score) {
                                 other.score += player.score
-                                handleUserEat(playerId, otherId, gameId)
+                                handleUserEat(player.walletAddress, other.walletAddress, gameId)
                                 console.log(`[PLAYER EAT] ${other.name} (${otherId}) ate ${player.name} (${playerId}) and gained ${player.score} points in ${gameId}`)
                                 delete g.players[playerId]
                                 broadcastState(gameId)

@@ -14,14 +14,14 @@ const PORT = (process as any).env.PORT || 3001
 
 // In-memory game state: { [gameId]: { players, food } }
 const games: Record<string, {
-    players: Record<string, { name: string, x: number, y: number, ws: WebSocket, score: number }>
+    players: Record<string, { name: string, x: number, y: number, ws: WebSocket, score: number, walletAddress: string }>
     food: Record<string, { id: string, x: number, y: number, score: number }>
 }> = {}
 
 // Utility: generate random ID
 const genId = () => Math.random().toString(36).slice(2, 10)
-// Utility: random position
-const randPos = () => ({ x: Math.random() * 1000, y: Math.random() * 1000 })
+// Utility: random position (laptop screen size)
+const randPos = () => ({ x: Math.random() * 1920, y: Math.random() * 1080 })
 // Utility: random score for food
 const randScore = () => Math.floor(Math.random() * 10) + 1
 // Utility: distance between two points
@@ -55,7 +55,7 @@ server.on('upgrade', (req, socket, head) => {
 const broadcastState = (gameId: string) => {
     const g = games[gameId]
     if (!g) return
-    const players = Object.entries(g.players).map(([id, p]) => ({ id, name: p.name, x: p.x, y: p.y, score: p.score }))
+    const players = Object.entries(g.players).map(([id, p]) => ({ id, name: p.name, x: p.x, y: p.y, score: p.score, walletAddress: p.walletAddress }))
     const food = Object.values(g.food)
     const msg = JSON.stringify({ type: 'state', players, food })
     Object.values(g.players).forEach(p => p.ws.readyState === 1 && p.ws.send(msg))
@@ -72,12 +72,13 @@ wss.on('connection', (ws: WebSocket, req) => {
         let msg
         try { msg = JSON.parse(data.toString()) } catch { return }
         if (msg.type === 'join') {
-            g.players[playerId] = { name: msg.name, x: 500, y: 500, ws, score: 0 }
+            if (!msg.walletAddress) return // Require walletAddress
+            g.players[playerId] = { name: msg.name, x: 500, y: 500, ws, score: 0, walletAddress: msg.walletAddress }
             if (Object.keys(g.food).length === 0)
                 Array.from({ length: 20 }, () => {
                     const id = genId(); g.food[id] = { id, ...randPos(), score: randScore() }
                 })
-            console.log(`[JOIN] ${msg.name} joined game ${gameId} as ${playerId}`)
+            console.log(`[JOIN] ${msg.name} joined game ${gameId} as ${playerId} (${msg.walletAddress})`)
             broadcastState(gameId)
         }
         if (msg.type === 'move') {
